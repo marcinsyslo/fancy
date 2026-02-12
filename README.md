@@ -12,5 +12,5 @@
 │   └── templates/
 │       ├── deployment.yaml
 │       └── istio-egress.yaml  
-└── deploy.sh           
+└── deploy.yaml           
 ```
