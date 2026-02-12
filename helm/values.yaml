@@ -1,0 +1,19 @@
+replicaCount: 2
+
+image:
+  repository: AZrepository
+  tag: latest
+  pullPolicy: Always
+
+db:
+  hostname: "localhost"
+  port: 5432
+  name: "db_name"
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

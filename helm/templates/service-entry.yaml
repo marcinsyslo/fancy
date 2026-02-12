@@ -1,0 +1,16 @@
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: {{ include "longnameforfancyproject.fullname" . }}-db-egress
+  namespace: {{ .Release.Namespace }}
+spec:
+  hosts:
+  - {{ .Values.db.hostname | quote }}
+  location: MESH_EXTERNAL
+  ports:
+  - number: 5432
+    name: tcp-postgresql
+    protocol: TCP
+  resolution: DNS
+  endpoints:
+  - address: {{ .Values.db.hostname | quote }}

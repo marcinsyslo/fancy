@@ -1,0 +1,6 @@
+apiVersion: v2
+name: longnameforfancyproject
+description: Short description here
+type: application
+version: 1.0.0
+appVersion: "1.2.3"

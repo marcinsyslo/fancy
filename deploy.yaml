@@ -1,0 +1,90 @@
+name: "CI/CD"
+
+on:
+  push:
+    branches: [ main, staging ]
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: 'Select env'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [ dev, acc, prod ]
+
+jobs:
+  validate:
+    name: "Validate"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Lint Helm"
+        run: helm lint ./helm
+
+build-image:
+    name: "Build"
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "log in to registry"
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.REGISTRY_URL }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: "Build and Push Image"
+        run: |
+          docker build . -t ${{ secrets.REGISTRY_URL }}/fancy-app:${{ github.sha }}
+          docker push ${{ secrets.REGISTRY_URL }}/fancy-app:${{ github.sha }}
+
+  deploy:
+    name: "Deploy"
+    needs: validate
+    runs-on: ubuntu-latest
+    
+    environment: 
+      name: ${{ github.event.inputs.target_env || (github.ref == 'refs/heads/main' && 'prod') || (github.ref == 'refs/heads/staging' && 'acc') || 'dev' }}
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "env context"
+        id: context
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENV="${{ github.event.inputs.target_env }}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            ENV="prod"
+          elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+            ENV="acc"
+          else
+            ENV="dev"
+          fi
+          echo "ENV_NAME=$ENV" >> $GITHUB_ENV
+
+      - name: "Setup Terraform"
+        uses: hashicorp/setup-terraform@v3
+
+      - name: "Terraform Apply"
+        id: tf
+        run: |
+          cd terraform
+          terraform init
+          terraform apply -auto-approve -var-file="../envs/${{ env.ENV_NAME }}.tfvars"
+          echo "db_host=$(terraform output -raw db_hostname)" >> $GITHUB_OUTPUT
+
+      - name: "Helm Upgrade"
+        run: |
+          helm upgrade --install myproj ./helm \
+            --namespace ${{ env.ENV_NAME }} \
+            --set image.tag=${{ github.sha }} \
+            --set image.repository=${{ secrets.REGISTRY_URL }}/fancy-app \
+            --create-namespace \
+            --set db.hostname=${{ steps.tf.outputs.db_host }} \
+            --values ./helm/values.yaml \
+            --values ./helm/values-${{ env.ENV_NAME }}.yaml \
+            --wait --timeout 5m0s
