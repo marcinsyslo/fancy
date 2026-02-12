@@ -10,7 +10,6 @@ RUN poetry config virtualenvs.create false \
 COPY . .
 
 ENV DB_PORT=5432
-ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 CMD ["python", "app.py"]
